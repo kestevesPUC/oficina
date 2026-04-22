@@ -1,4 +1,7 @@
-name: Build and Deploy Docker Image - oficina-ineteligente
+# Docs for the Azure Web Apps Deploy action: https://github.com/Azure/webapps-deploy
+# More GitHub Actions for Azure: https://github.com/Azure/actions
+
+name: Build and deploy Node.js app to Azure Web App - oficina-ineteligente
 
 on:
   push:
@@ -7,35 +10,55 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-and-deploy:
+  build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read #This is required for actions/checkout
 
     steps:
-      # 1️⃣ Checkout do código
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      # 2️⃣ Login no Azure
-      - name: Azure Login
+      - name: Set up Node.js version
+        uses: actions/setup-node@v3
+        with:
+          node-version: '22.x'
+
+      - name: npm install, build, and test
+        run: |
+          npm install
+          npm run build
+
+      - name: Upload artifact for deployment job
+        uses: actions/upload-artifact@v4
+        with:
+          name: node-app
+          path: ./dist
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+    permissions:
+      id-token: write #This is required for requesting the JWT
+      contents: read #This is required for actions/checkout
+
+    steps:
+      - name: Download artifact from build job
+        uses: actions/download-artifact@v4
+        with:
+          name: node-app
+      
+      - name: Login to Azure
         uses: azure/login@v2
         with:
           client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_504F81AF1F3C4970B919A265D8F23D25 }}
           tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_4983D5B7C40B4C46A04C1B1A49E52147 }}
           subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_D6ECBDD0239C41BE92C99C3D0858CC20 }}
 
-      # 3️⃣ Login no Azure Container Registry (ACR)
-      - name: Login to Azure Container Registry
-        run: |
-          az acr login --name <NOME_DO_SEU_ACR>
-
-      # 4️⃣ Build da imagem Docker
-      - name: Build Docker image
-        run: |
-          docker build \
-            -t <NOME_DO_SEU_ACR>.azurecr.io/oficina-ineteligente:latest \
-            .
-
-      # 5️⃣ Push da imagem para o ACR
-      - name: Push Docker image
-        run: |
-          docker push <NOME_DO_SEU_ACR>.azurecr.io/oficina-ineteligente:latest
+      - name: 'Deploy to Azure Web App'
+        id: deploy-to-webapp
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: 'oficina-ineteligente'
+          slot-name: 'Production'
+          package: .
+          
